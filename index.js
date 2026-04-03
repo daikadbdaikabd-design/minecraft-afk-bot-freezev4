@@ -11,7 +11,7 @@ function startBot() {
   console.log("Đang khởi động bot...")
 
   bot = mineflayer.createBot({
-    host: "nl-01.freezehost.pro:9598",
+    host: "warmhousesmp.nethr.nl",
     port: 9598,
     username: "KimAnh2k12",
     version: "1.20.1"
