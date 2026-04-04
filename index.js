@@ -1,18 +1,18 @@
 const mineflayer = require("mineflayer");
 const express = require("express");
 
-// CẤU HÌNH HỆ THỐNG
+// --- CẤU HÌNH HỆ THỐNG ĐỘC QUYỀN ---
 const SETTINGS = {
     host: "warmhousesmp.nethr.nl",
     port: 9598,
-    username: "Skeleten2k12",
+    username: "Dream",
     version: "1.20.1",
-    password: "bot123", // Thay mật khẩu của bạn
-    reconnectDelay: 10000
+    password: "bot123", // Mật khẩu của bạn
+    reconnectDelay: 20000 // 20 giây thử lại nếu mất kết nối
 };
 
 function startBot() {
-    console.log(`[${new Date().toLocaleTimeString()}] Đang kết nối tới Warm House SMP...`);
+    console.log(`[${new Date().toLocaleTimeString()}] Đang khởi động hệ thống Bot...`);
 
     const bot = mineflayer.createBot({
         host: SETTINGS.host,
@@ -22,66 +22,75 @@ function startBot() {
         checkTimeoutInterval: 60000
     });
 
-    // 1. TỰ ĐỘNG LOGIN / REGISTER (NHANH & GỌN)
+    // 1. TỰ ĐỘNG ĐĂNG KÝ / ĐĂNG NHẬP
     bot.on("messagestr", (msg) => {
         const message = msg.toLowerCase();
+        // Nhận diện lệnh đăng ký
         if (message.includes("/register")) {
+            console.log("-> Đang thực hiện đăng ký...");
             bot.chat(`/register ${SETTINGS.password} ${SETTINGS.password}`);
-        } else if (message.includes("/login")) {
+        } 
+        // Nhận diện lệnh đăng nhập
+        else if (message.includes("/login")) {
+            console.log("-> Đang thực hiện đăng nhập...");
             bot.chat(`/login ${SETTINGS.password}`);
         }
     });
 
-    // 2. KHI VÀO GAME
+    // 2. KHI VÀO GAME (SPAWN)
     bot.once("spawn", () => {
-        console.log(`[SUCCESS] Bot ${bot.username} đã online thành công!`);
-        
-        // Chạy các hành động duy trì kết nối
+        console.log(`[SUCCESS] Bot ${bot.username} đã vào game!`);
+
+        // MODULE: NHẢY 1 GIÂY 1 LẦN (THEO YÊU CẦU)
         setInterval(() => {
-            if (!bot.entity) return;
-
-            // Xoay đầu ngẫu nhiên như người thật
-            const yaw = Math.random() * Math.PI * 2;
-            const pitch = (Math.random() - 0.5) * 0.5;
-            bot.look(yaw, pitch, false);
-
-            // Hành động vung tay
-            bot.swingArm();
-
-            // Nhảy ngẫu nhiên (Anti-AFK chuyên nghiệp)
-            if (Math.random() > 0.7) {
-                bot.setControlState("jump", true);
-                setTimeout(() => bot.setControlState("jump", false), 500);
+            if (bot.entity) {
+                bot.setControlState('jump', true);
+                setTimeout(() => bot.setControlState('jump', false), 400);
             }
-        }, 15000);
+        }, 1000); // Đúng 1 giây nhảy 1 lần
 
-        // Chat quảng bá Server (Tần suất vừa phải)
+        // MODULE: VUNG TAY & XOAY ĐẦU (REALISTIC)
+        setInterval(() => {
+            if (bot.entity) {
+                const yaw = Math.random() * Math.PI * 2;
+                const pitch = (Math.random() - 0.5) * 0.5;
+                bot.look(yaw, pitch, false);
+                bot.swingArm();
+            }
+        }, 3000); // 3 giây xoay đầu 1 lần
+
+        // MODULE: CHAT QUẢNG BÁ (CHỐNG SPAM KICK)
         setInterval(() => {
             const ads = [
                 "🏠 Chào mừng bạn đến với Warm House SMP!",
-                "✨ Chúc mọi người chơi game vui vẻ tại warmhousesmp.nethr.nl",
-                "🔥 Server mượt, cộng đồng chất lượng!",
-                "💎 Support Warm House nhiệt tình nhé anh em."
+                "✨ Server mượt mà - Trải nghiệm cực đã!",
+                "🔥 warmhousesmp.nethr.nl - Join ngay anh em ơi!",
+                "💎 Chúc mọi người chơi game vui vẻ!"
             ];
             bot.chat(ads[Math.floor(Math.random() * ads.length)]);
-        }, 150000); 
+        }, 120000); // 2 phút chat 1 lần để an toàn
     });
 
-    // 3. XỬ LÝ LỖI VÀ TỰ KẾT NỐI LẠI
+    // 3. FIX LỖI KẾT NỐI & TỰ ĐỘNG RECONNECT
     bot.on("end", (reason) => {
-        console.log(`[WARN] Mất kết nối: ${reason}. Reconnect sau 10s...`);
+        console.log(`[WARN] Mất kết nối (${reason}). Đang đợi để quay lại...`);
         setTimeout(startBot, SETTINGS.reconnectDelay);
     });
 
-    bot.on("error", (err) => console.log("[ERROR]", err.message));
-    bot.on("kicked", (reason) => console.log("[KICKED]", reason));
+    bot.on("error", (err) => {
+        console.log("[ERROR] Gặp lỗi:", err.message);
+    });
+
+    bot.on("kicked", (reason) => {
+        console.log("[KICKED] Bị kick vì:", reason);
+    });
 }
 
-// WEB SERVER (Giữ cho Render không tắt Bot)
+// --- WEB SERVER GIỮ BOT ONLINE 24/7 ---
 const app = express();
-app.get("/", (req, res) => res.send("Warm House Bot Status: Online ✅"));
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`[WEB] Server đang chạy tại port ${PORT}`));
+app.get("/", (req, res) => res.send("Bot Warm House: Đang hoạt động ✅"));
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`[WEB] Server chạy tại port ${PORT}`));
 
-// Khởi chạy
+// KÍCH HOẠT
 startBot();
