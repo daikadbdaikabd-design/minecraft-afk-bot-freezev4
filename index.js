@@ -1,99 +1,146 @@
 const mineflayer = require("mineflayer");
 const express = require("express");
+const chalk = require("chalk"); // Cần cài: npm install chalk@4.1.2
 
-let bot;
-let moveInterval;
-let chatInterval;
-let lookInterval;
-
-function startBot() {
-  console.log("Đang khởi động bot...");
-
-  bot = mineflayer.createBot({
+// ================= [ CẤU HÌNH ĐỘC QUYỀN ] =================
+const CONFIG = {
     host: "warmhousesmp.nethr.nl",
     port: 9598,
-    username: "KimAnh2k9",
+    username: "Dream",
     version: "1.20.1",
-  });
-
-  // PHẦN QUAN TRỌNG: TỰ ĐỘNG LOGIN/REGISTER
-  bot.on("messagestr", (message) => {
-    const msg = message.toLowerCase();
-    
-    if (msg.includes("/register")) {
-      console.log("Phát hiện yêu cầu đăng ký...");
-      bot.chat("/register bot123 bot123");
-    } 
-    else if (msg.includes("/login")) {
-      console.log("Phát hiện yêu cầu đăng nhập...");
-      bot.chat("/login bot123");
+    password: "bot123",
+    reconnectDelay: 15000,
+    spam: {
+        enabled: true,
+        interval: 60000, // 60 giây chat 1 lần
+        messages: [
+            "⭐ Cookies SMP is the best!",
+            "🔥 Top 1 Server Minecraft VN",
+            "💎 KimAnh2k9 bot is online",
+            "🚀 Optimization by Boss Tool Ultimate"
+        ]
     }
-  });
+};
 
-  bot.once("spawn", () => {
-    console.log("Bot đã vào world!");
+let bot;
+let state = {
+    isLoggedIn: false,
+    retryCount: 0
+};
 
-    // Đợi 3 giây sau khi spawn mới bắt đầu hành động để tránh lag/kick
-    setTimeout(() => {
-      startActions();
-    }, 3000);
-  });
+// ================= [ HỆ THỐNG LOG CHUYÊN NGHIỆP ] =================
+const logger = {
+    info: (msg) => console.log(chalk.blue(`[INFO] `) + msg),
+    success: (msg) => console.log(chalk.green(`[SUCCESS] `) + msg),
+    warn: (msg) => console.log(chalk.yellow(`[WARN] `) + msg),
+    error: (msg) => console.log(chalk.red(`[ERROR] `) + msg),
+    system: (msg) => console.log(chalk.magenta.bold(`\n=== ${msg} ===\n`))
+};
 
-  function startActions() {
-    // DI CHUYỂN NGẪU NHIÊN
-    moveInterval = setInterval(() => {
-      if (!bot.entity) return;
+function initBot() {
+    logger.system("KHỞI CHẠY HỆ THỐNG BOT ĐỘC QUYỀN");
+    
+    bot = mineflayer.createBot({
+        host: CONFIG.host,
+        port: CONFIG.port,
+        username: CONFIG.username,
+        version: CONFIG.version,
+        hideErrors: true
+    });
 
-      const actions = ["forward", "back", "left", "right"];
-      const action = actions[Math.floor(Math.random() * actions.length)];
-
-      bot.setControlState(action, true);
-      bot.setControlState("jump", true);
-
-      setTimeout(() => {
-        bot.setControlState("jump", false);
-        bot.clearControlStates();
-      }, 600);
-
-      bot.swingArm();
-    }, 4000);
-
-    // XOAY ĐẦU
-    lookInterval = setInterval(() => {
-      const yaw = Math.random() * Math.PI * 2;
-      const pitch = (Math.random() - 0.5) * 0.5;
-      bot.look(yaw, pitch, true);
-    }, 3000);
-
-    // CHAT NGẪU NHIÊN
-    const messages = ["hello", "hi everyone", "nice server", "anyone online?", "im here", "lol"];
-    chatInterval = setInterval(() => {
-      const msg = messages[Math.floor(Math.random() * messages.length)];
-      bot.chat(msg);
-    }, 90000);
-  }
-
-  // XỬ LÝ LỖI VÀ RECONNECT
-  bot.on("end", (reason) => {
-    console.log(`Bot mất kết nối do: ${reason}. Reconnect sau 10s...`);
-    clearIntervals();
-    setTimeout(startBot, 10000);
-  });
-
-  bot.on("error", (err) => console.log("Lỗi:", err.message));
-  bot.on("kicked", (reason) => console.log("Bot bị kick:", reason));
+    setupEvents();
 }
 
-function clearIntervals() {
-  clearInterval(moveInterval);
-  clearInterval(chatInterval);
-  clearInterval(lookInterval);
+function setupEvents() {
+    // 1. XỬ LÝ ĐĂNG NHẬP THÔNG MINH
+    bot.on("messagestr", (message) => {
+        const msg = message.toLowerCase();
+        
+        if (msg.includes("/register")) {
+            logger.warn("Yêu cầu đăng ký mới...");
+            bot.chat(`/register ${CONFIG.password} ${CONFIG.password}`);
+        } 
+        else if (msg.includes("/login")) {
+            logger.info("Đang gửi lệnh đăng nhập...");
+            bot.chat(`/login ${CONFIG.password}`);
+        }
+        
+        // Nhận diện khi đã vào server thành công (tùy server)
+        if (msg.includes("thành công") || msg.includes("success") || msg.includes("welcome")) {
+            state.isLoggedIn = true;
+        }
+    });
+
+    // 2. KHI VÀO THẾ GIỚI (SPAWN)
+    bot.once("spawn", () => {
+        logger.success(`Đã kết nối tới ${CONFIG.host}:${CONFIG.port}`);
+        state.isLoggedIn = true;
+        
+        // Kích hoạt các module chức năng
+        startAntiAFK();
+        if (CONFIG.spam.enabled) startSpamModule();
+    });
+
+    // 3. MODULE CHỐNG AFK (ANTI-KICK)
+    function startAntiAFK() {
+        setInterval(() => {
+            if (!bot.entity) return;
+            
+            // Nhảy và xoay ngẫu nhiên
+            bot.setControlState("jump", true);
+            const yaw = Math.random() * Math.PI * 2;
+            bot.look(yaw, 0);
+            
+            setTimeout(() => bot.setControlState("jump", false), 500);
+            bot.swingArm();
+            
+            logger.info("Anti-AFK: Đang thực hiện hành động giữ kết nối.");
+        }, 15000); 
+    }
+
+    // 4. MODULE SPAM (QUẢNG CÁO/CHAT)
+    function startSpamModule() {
+        setInterval(() => {
+            if (!state.isLoggedIn) return;
+            const randomMsg = CONFIG.spam.messages[Math.floor(Math.random() * CONFIG.spam.messages.length)];
+            bot.chat(randomMsg);
+            logger.success(`Spam: ${randomMsg}`);
+        }, CONFIG.spam.interval);
+    }
+
+    // 5. XỬ LÝ LỖI & TỰ ĐỘNG KẾT NỐI LẠI
+    bot.on("kicked", (reason) => {
+        logger.error(`Bị Kick: ${reason}`);
+    });
+
+    bot.on("end", () => {
+        state.isLoggedIn = false;
+        logger.warn(`Mất kết nối. Thử lại sau ${CONFIG.reconnectDelay/1000}s...`);
+        setTimeout(initBot, CONFIG.reconnectDelay);
+    });
+
+    bot.on("error", (err) => {
+        if (err.code === "ECONNREFUSED") {
+            logger.error(`Không thể kết nối tới IP: ${err.address}`);
+        } else {
+            logger.error(`Lỗi hệ thống: ${err.message}`);
+        }
+    });
 }
 
-startBot();
-
-// WEB SERVER GIỮ BOT ONLINE
+// ================= [ WEB UI SERVER ] =================
 const app = express();
-app.get("/", (req, res) => res.send("Bot Minecraft đang chạy"));
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Web server chạy port", PORT));
+app.get("/", (req, res) => {
+    res.json({
+        status: "Online",
+        bot_name: CONFIG.username,
+        server: CONFIG.host,
+        logged_in: state.isLoggedIn
+    });
+});
+
+app.listen(3000, () => {
+    logger.info("Trang quản lý Bot chạy tại Port 3000");
+});
+
+initBot();
