@@ -1,146 +1,118 @@
 const mineflayer = require("mineflayer");
+const autoeat = require("mineflayer-auto-eat");
+const armorManager = require("mineflayer-armor-manager");
 const express = require("express");
-const chalk = require("chalk"); // Cần cài: npm install chalk@4.1.2
 
-// ================= [ CẤU HÌNH ĐỘC QUYỀN ] =================
-const CONFIG = {
+/**
+ * CẤU HÌNH HỆ THỐNG
+ */
+const SETTINGS = {
     host: "warmhousesmp.nethr.nl",
     port: 9598,
-    username: "Technoblade",
+    username: "Dream",
     version: "1.20.1",
     password: "bot123",
-    reconnectDelay: 15000,
-    spam: {
-        enabled: true,
-        interval: 60000, // 60 giây chat 1 lần
-        messages: [
-            "⭐ Cookies SMP is the best!",
-            "🔥 Top 1 Server Minecraft VN",
-            "💎 KimAnh2k9 bot is online",
-            "🚀 Optimization by Boss Tool Ultimate"
-        ]
+    actions: {
+        spamInterval: 120000, // 2 phút/lần để tránh bị kick spam
+        antiAfkInterval: 15000,
+        reconnectDelay: 10000
     }
 };
 
-let bot;
-let state = {
-    isLoggedIn: false,
-    retryCount: 0
-};
+class ProBot {
+    constructor() {
+        this.bot = null;
+        this.init();
+    }
 
-// ================= [ HỆ THỐNG LOG CHUYÊN NGHIỆP ] =================
-const logger = {
-    info: (msg) => console.log(chalk.blue(`[INFO] `) + msg),
-    success: (msg) => console.log(chalk.green(`[SUCCESS] `) + msg),
-    warn: (msg) => console.log(chalk.yellow(`[WARN] `) + msg),
-    error: (msg) => console.log(chalk.red(`[ERROR] `) + msg),
-    system: (msg) => console.log(chalk.magenta.bold(`\n=== ${msg} ===\n`))
-};
+    init() {
+        console.log(`[SYSTEM] Đang kết nối tới ${SETTINGS.host}...`);
+        
+        this.bot = mineflayer.createBot({
+            host: SETTINGS.host,
+            port: SETTINGS.port,
+            username: SETTINGS.username,
+            version: SETTINGS.version,
+            checkTimeoutInterval: 60000
+        });
 
-function initBot() {
-    logger.system("KHỞI CHẠY HỆ THỐNG BOT ĐỘC QUYỀN");
-    
-    bot = mineflayer.createBot({
-        host: CONFIG.host,
-        port: CONFIG.port,
-        username: CONFIG.username,
-        version: CONFIG.version,
-        hideErrors: true
-    });
+        this.loadPlugins();
+        this.bindEvents();
+    }
 
-    setupEvents();
+    loadPlugins() {
+        this.bot.loadPlugin(autoeat); // Tự động ăn khi đói
+        this.bot.loadPlugin(armorManager); // Tự động mặc giáp tốt nhất có trong đồ
+    }
+
+    bindEvents() {
+        // 1. Xử lý Đăng nhập/Đăng ký tự động
+        this.bot.on("messagestr", (msg) => {
+            const message = msg.toLowerCase();
+            if (message.includes("/register")) {
+                this.bot.chat(`/register ${SETTINGS.password} ${SETTINGS.password}`);
+            } else if (message.includes("/login")) {
+                this.bot.chat(`/login ${SETTINGS.password}`);
+            }
+        });
+
+        // 2. Khi Bot xuất hiện trong World
+        this.bot.once("spawn", () => {
+            console.log(`[SUCCESS] ${this.bot.username} đã online tại Warm House SMP!`);
+            
+            // Cấu hình tự động ăn
+            this.bot.autoEat.options.priority = "foodPoints";
+            this.bot.autoEat.options.bannedFood = ["rotten_flesh", "spider_eye"];
+            
+            this.startLifeCycles();
+        });
+
+        // 3. Xử lý lỗi và Tự động kết nối lại
+        this.bot.on("end", (reason) => {
+            console.log(`[WARN] Bot mất kết nối: ${reason}. Thử lại sau 10s...`);
+            setTimeout(() => new ProBot(), SETTINGS.actions.reconnectDelay);
+        });
+
+        this.bot.on("error", (err) => console.log(`[ERROR] ${err.message}`));
+    }
+
+    startLifeCycles() {
+        // Module: Di chuyển như người thật (Anti-AFK)
+        setInterval(() => {
+            if (!this.bot.entity) return;
+            
+            const randomPitch = (Math.random() - 0.5) * 0.5;
+            const randomYaw = Math.random() * Math.PI * 2;
+            
+            this.bot.look(randomYaw, randomPitch, true);
+            this.bot.swingArm(); // Vung tay
+            
+            // Nhảy ngẫu nhiên
+            if (Math.random() > 0.7) {
+                this.bot.setControlState("jump", true);
+                setTimeout(() => this.bot.setControlState("jump", false), 500);
+            }
+        }, SETTINGS.actions.antiAfkInterval);
+
+        // Module: Spam quảng bá chuyên nghiệp
+        const quotes = [
+            "⭐ Warm House SMP - Trải nghiệm Minecraft sinh tồn đích thực!",
+            "🔥 Chào mừng mọi người đến với warmhousesmp.nethr.nl",
+            "💎 Server ổn định, cộng đồng thân thiện.",
+            "🚀 Chúc mọi người chơi game vui vẻ!"
+        ];
+
+        setInterval(() => {
+            const pick = quotes[Math.floor(Math.random() * quotes.length)];
+            this.bot.chat(pick);
+        }, SETTINGS.actions.spamInterval);
+    }
 }
 
-function setupEvents() {
-    // 1. XỬ LÝ ĐĂNG NHẬP THÔNG MINH
-    bot.on("messagestr", (message) => {
-        const msg = message.toLowerCase();
-        
-        if (msg.includes("/register")) {
-            logger.warn("Yêu cầu đăng ký mới...");
-            bot.chat(`/register ${CONFIG.password} ${CONFIG.password}`);
-        } 
-        else if (msg.includes("/login")) {
-            logger.info("Đang gửi lệnh đăng nhập...");
-            bot.chat(`/login ${CONFIG.password}`);
-        }
-        
-        // Nhận diện khi đã vào server thành công (tùy server)
-        if (msg.includes("thành công") || msg.includes("success") || msg.includes("welcome")) {
-            state.isLoggedIn = true;
-        }
-    });
-
-    // 2. KHI VÀO THẾ GIỚI (SPAWN)
-    bot.once("spawn", () => {
-        logger.success(`Đã kết nối tới ${CONFIG.host}:${CONFIG.port}`);
-        state.isLoggedIn = true;
-        
-        // Kích hoạt các module chức năng
-        startAntiAFK();
-        if (CONFIG.spam.enabled) startSpamModule();
-    });
-
-    // 3. MODULE CHỐNG AFK (ANTI-KICK)
-    function startAntiAFK() {
-        setInterval(() => {
-            if (!bot.entity) return;
-            
-            // Nhảy và xoay ngẫu nhiên
-            bot.setControlState("jump", true);
-            const yaw = Math.random() * Math.PI * 2;
-            bot.look(yaw, 0);
-            
-            setTimeout(() => bot.setControlState("jump", false), 500);
-            bot.swingArm();
-            
-            logger.info("Anti-AFK: Đang thực hiện hành động giữ kết nối.");
-        }, 15000); 
-    }
-
-    // 4. MODULE SPAM (QUẢNG CÁO/CHAT)
-    function startSpamModule() {
-        setInterval(() => {
-            if (!state.isLoggedIn) return;
-            const randomMsg = CONFIG.spam.messages[Math.floor(Math.random() * CONFIG.spam.messages.length)];
-            bot.chat(randomMsg);
-            logger.success(`Spam: ${randomMsg}`);
-        }, CONFIG.spam.interval);
-    }
-
-    // 5. XỬ LÝ LỖI & TỰ ĐỘNG KẾT NỐI LẠI
-    bot.on("kicked", (reason) => {
-        logger.error(`Bị Kick: ${reason}`);
-    });
-
-    bot.on("end", () => {
-        state.isLoggedIn = false;
-        logger.warn(`Mất kết nối. Thử lại sau ${CONFIG.reconnectDelay/1000}s...`);
-        setTimeout(initBot, CONFIG.reconnectDelay);
-    });
-
-    bot.on("error", (err) => {
-        if (err.code === "ECONNREFUSED") {
-            logger.error(`Không thể kết nối tới IP: ${err.address}`);
-        } else {
-            logger.error(`Lỗi hệ thống: ${err.message}`);
-        }
-    });
-}
-
-// ================= [ WEB UI SERVER ] =================
+// KHỞI CHẠY WEB SERVER (GIỮ ONLINE TRÊN RENDER/FREEZEHOST)
 const app = express();
-app.get("/", (req, res) => {
-    res.json({
-        status: "Online",
-        bot_name: CONFIG.username,
-        server: CONFIG.host,
-        logged_in: state.isLoggedIn
-    });
-});
+app.get("/", (req, res) => res.send("Bot Status: <b>Online</b>"));
+app.listen(process.env.PORT || 3000, () => console.log("[WEB] Dashboard Ready."));
 
-app.listen(3000, () => {
-    logger.info("Trang quản lý Bot chạy tại Port 3000");
-});
-
-initBot();
+// KÍCH HOẠT BOT
+new ProBot();
