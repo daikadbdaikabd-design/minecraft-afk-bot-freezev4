@@ -5,7 +5,7 @@ const express = require("express");
 const SETTINGS = {
     host: "warmhousesmp.nethr.nl",
     port: 9598,
-    username: "Dream",
+    username: "OmaChi",
     version: "1.20.1",
     password: "bot123", // Mật khẩu của bạn
     reconnectDelay: 20000 // 20 giây thử lại nếu mất kết nối
