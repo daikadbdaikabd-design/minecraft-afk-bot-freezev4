@@ -1,118 +1,101 @@
 const mineflayer = require("mineflayer");
-const autoeat = require("mineflayer-auto-eat");
-const armorManager = require("mineflayer-armor-manager");
 const express = require("express");
 
-/**
- * CẤU HÌNH HỆ THỐNG
- */
-const SETTINGS = {
+const CONFIG = {
     host: "warmhousesmp.nethr.nl",
     port: 9598,
-    username: "Dream",
+    username: "OmaChi",
     version: "1.20.1",
     password: "bot123",
-    actions: {
-        spamInterval: 120000, // 2 phút/lần để tránh bị kick spam
-        antiAfkInterval: 15000,
-        reconnectDelay: 10000
-    }
+    reconnectDelay: 10000
 };
 
-class ProBot {
-    constructor() {
-        this.bot = null;
-        this.init();
-    }
+function createBot() {
+    console.log("[SYSTEM] Đang khởi động Bot chuyên nghiệp...");
 
-    init() {
-        console.log(`[SYSTEM] Đang kết nối tới ${SETTINGS.host}...`);
-        
-        this.bot = mineflayer.createBot({
-            host: SETTINGS.host,
-            port: SETTINGS.port,
-            username: SETTINGS.username,
-            version: SETTINGS.version,
-            checkTimeoutInterval: 60000
-        });
+    const bot = mineflayer.createBot({
+        host: CONFIG.host,
+        port: CONFIG.port,
+        username: CONFIG.username,
+        version: CONFIG.version
+    });
 
-        this.loadPlugins();
-        this.bindEvents();
-    }
+    // --- TỰ ĐỘNG ĐĂNG NHẬP/ĐĂNG KÝ ---
+    bot.on("messagestr", (msg) => {
+        const message = msg.toLowerCase();
+        if (message.includes("/register")) {
+            bot.chat(`/register ${CONFIG.password} ${CONFIG.password}`);
+        } else if (message.includes("/login")) {
+            bot.chat(`/login ${CONFIG.password}`);
+        }
+    });
 
-    loadPlugins() {
-        this.bot.loadPlugin(autoeat); // Tự động ăn khi đói
-        this.bot.loadPlugin(armorManager); // Tự động mặc giáp tốt nhất có trong đồ
-    }
+    bot.once("spawn", () => {
+        console.log(`[SUCCESS] Bot ${bot.username} đã online!`);
+        startBrain(bot);
+    });
 
-    bindEvents() {
-        // 1. Xử lý Đăng nhập/Đăng ký tự động
-        this.bot.on("messagestr", (msg) => {
-            const message = msg.toLowerCase();
-            if (message.includes("/register")) {
-                this.bot.chat(`/register ${SETTINGS.password} ${SETTINGS.password}`);
-            } else if (message.includes("/login")) {
-                this.bot.chat(`/login ${SETTINGS.password}`);
-            }
-        });
-
-        // 2. Khi Bot xuất hiện trong World
-        this.bot.once("spawn", () => {
-            console.log(`[SUCCESS] ${this.bot.username} đã online tại Warm House SMP!`);
-            
-            // Cấu hình tự động ăn
-            this.bot.autoEat.options.priority = "foodPoints";
-            this.bot.autoEat.options.bannedFood = ["rotten_flesh", "spider_eye"];
-            
-            this.startLifeCycles();
-        });
-
-        // 3. Xử lý lỗi và Tự động kết nối lại
-        this.bot.on("end", (reason) => {
-            console.log(`[WARN] Bot mất kết nối: ${reason}. Thử lại sau 10s...`);
-            setTimeout(() => new ProBot(), SETTINGS.actions.reconnectDelay);
-        });
-
-        this.bot.on("error", (err) => console.log(`[ERROR] ${err.message}`));
-    }
-
-    startLifeCycles() {
-        // Module: Di chuyển như người thật (Anti-AFK)
-        setInterval(() => {
-            if (!this.bot.entity) return;
-            
-            const randomPitch = (Math.random() - 0.5) * 0.5;
-            const randomYaw = Math.random() * Math.PI * 2;
-            
-            this.bot.look(randomYaw, randomPitch, true);
-            this.bot.swingArm(); // Vung tay
-            
-            // Nhảy ngẫu nhiên
-            if (Math.random() > 0.7) {
-                this.bot.setControlState("jump", true);
-                setTimeout(() => this.bot.setControlState("jump", false), 500);
-            }
-        }, SETTINGS.actions.antiAfkInterval);
-
-        // Module: Spam quảng bá chuyên nghiệp
-        const quotes = [
-            "⭐ Warm House SMP - Trải nghiệm Minecraft sinh tồn đích thực!",
-            "🔥 Chào mừng mọi người đến với warmhousesmp.nethr.nl",
-            "💎 Server ổn định, cộng đồng thân thiện.",
-            "🚀 Chúc mọi người chơi game vui vẻ!"
-        ];
-
-        setInterval(() => {
-            const pick = quotes[Math.floor(Math.random() * quotes.length)];
-            this.bot.chat(pick);
-        }, SETTINGS.actions.spamInterval);
-    }
+    // --- XỬ LÝ LỖI & RECONNECT ---
+    bot.on("error", (err) => console.log("[ERROR]", err.message));
+    bot.on("end", (reason) => {
+        console.log(`[WARN] Mất kết nối (${reason}). Đang hồi sinh sau 10s...`);
+        setTimeout(createBot, CONFIG.reconnectDelay);
+    });
 }
 
-// KHỞI CHẠY WEB SERVER (GIỮ ONLINE TRÊN RENDER/FREEZEHOST)
-const app = express();
-app.get("/", (req, res) => res.send("Bot Status: <b>Online</b>"));
-app.listen(process.env.PORT || 3000, () => console.log("[WEB] Dashboard Ready."));
+// --- HỆ THỐNG TRÍ TUỆ NHÂN TẠO CỦA BOT ---
+function startBrain(bot) {
+    
+    // 1. Module: Tự động ăn (Không cần Plugin)
+    setInterval(() => {
+        if (bot.food < 16) { // Nếu thanh thức ăn dưới 8 đùi thịt
+            const food = bot.inventory.items().find(item => 
+                ["cooked_beef", "cooked_chicken", "bread", "apple", "cooked_porkchop"].includes(item.name)
+            );
+            if (food) {
+                bot.equip(food, "hand")
+                    .then(() => bot.consume())
+                    .catch(() => {});
+            }
+        }
+    }, 10000);
 
-// KÍCH HOẠT BOT
-new ProBot();
+    // 2. Module: Hành động như người thật (Clear & Pro)
+    setInterval(() => {
+        if (!bot.entity) return;
+
+        // Xoay đầu tự nhiên
+        const yaw = Math.random() * Math.PI * 2;
+        const pitch = (Math.random() - 0.5) * 0.5;
+        bot.look(yaw, pitch, false);
+
+        // Vung tay ngẫu nhiên
+        bot.swingArm();
+
+        // Nhảy nếu bị kẹt hoặc ngẫu nhiên
+        if (Math.random() > 0.8) {
+            bot.setControlState("jump", true);
+            setTimeout(() => bot.setControlState("jump", false), 500);
+        }
+    }, 15000);
+
+    // 3. Module: Chat quảng bá Warm House
+    const ads = [
+        "🏠 Chào mừng bạn đến với Warm House SMP!",
+        "✨ Chúc mọi người một ngày chơi game vui vẻ.",
+        "🔥 Server sinh tồn tự nhiên, cực mượt tại warmhousesmp.nethr.nl",
+        "💎 Tôi là Bot hỗ trợ của Warm House."
+    ];
+    setInterval(() => {
+        const msg = ads[Math.floor(Math.random() * ads.length)];
+        bot.chat(msg);
+    }, 120000);
+}
+
+// --- WEB SERVER (BẮT BUỘC ĐỂ RENDER KHÔNG STOP BOT) ---
+const app = express();
+app.get("/", (req, res) => res.send("Bot Warm House: Online ✅"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`[WEB] Server chạy tại port ${PORT}`));
+
+createBot();
