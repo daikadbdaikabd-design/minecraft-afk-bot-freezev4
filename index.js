@@ -6,7 +6,7 @@ const chalk = require("chalk"); // Cần cài: npm install chalk@4.1.2
 const CONFIG = {
     host: "warmhousesmp.nethr.nl",
     port: 9598,
-    username: "Dream",
+    username: "Technoblade",
     version: "1.20.1",
     password: "bot123",
     reconnectDelay: 15000,
